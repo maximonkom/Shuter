@@ -1,0 +1,200 @@
+from pygame import *
+from random import randint
+from time import time as timer
+win_width = 700
+win_height = 500
+win_display = display.set_mode((win_width, win_height))
+display.set_caption("Шутер")
+background = transform.scale(image.load("galaxy.jpg"), (700,500))
+
+
+class GameSprite(sprite.Sprite):
+    def __init__(self, player_image, player_x, player_y, player_speed, player_width, player_height):
+        super().__init__()
+        self.width = player_width
+        self.height = player_height
+        self.image = transform.scale(image.load(player_image), (self.width, self.height)) 
+        self.rect = self.image.get_rect()
+        self.rect.x = player_x
+        self.rect.y = player_y
+        self.speed = player_speed
+
+    def reset(self):
+        win_display.blit(self.image, (self.rect.x, self.rect.y))
+
+#класс игрока
+class Player(GameSprite):
+    def update(self):
+         
+        if keys_pressed[K_a] and self.rect.x > 5:
+            self.rect.x -= self.speed
+        elif keys_pressed[K_d] and self.rect.x < win_width - 80:
+            self.rect.x += self.speed
+    
+    def fire(self):
+        bullet = Bullet("laser.png", self.rect.centerx, self.rect.top, 3, 10, 25)
+        
+        #shoot.play()
+        bullets.add(bullet)
+
+
+class Bullet(GameSprite):
+    def update(self):
+        self.rect.y -= self.speed
+        if self.rect.y < 0:
+            self.kill()
+            
+
+class Asteroid(GameSprite):
+    def update(self, *args):   
+        if  self.rect.y < args[0]:     
+            self.rect.y += self.speed
+        else: 
+            self.rect.y = -50
+            self.rect.x = randint(0, args[1] -100)       
+
+    def reset(self):
+        win_display.blit(self.image, (self.rect.x, self.rect.y))
+
+
+class Enemy(GameSprite):
+    def update(self, *args):
+        if  self.rect.y < args[0]:     
+            self.rect.y += self.speed
+        else:
+            global missed 
+            missed += 1
+            self.rect.y = -50
+            self.rect.x = randint(0, args[1] -100)
+
+
+#mixer.init()
+#mixer.music.load("space.ogg")
+#mixer.music.play()
+#shoot = mixer.Sound("fire.ogg")
+
+
+rocket = Player("rocket2.png", win_width/2.25, win_height -100, 5, 100, 100)
+
+bullets = sprite.Group()
+
+monsters = sprite.Group()
+
+asteroids = sprite.Group()
+
+for a in range(3):
+    x = randint(0, win_width)
+    y = randint(0, win_height - 275)
+    speed = 1
+    asteroid = Asteroid("asteroid.png", x, y, speed, 65, 65)
+    asteroids.add(asteroid)
+
+for a in range(5):
+    x = randint(0, win_width)
+    y = randint(0, win_height - 275)
+    speed = 1
+    monster = Enemy("ufo.png", x, y, speed, 100, 70)
+    monsters.add(monster)
+
+
+FPS = 60
+
+finish = False
+
+run = True
+
+rel_time = False
+
+num_fire = 0
+
+missed = 0
+
+SPACE = True
+
+clock = time.Clock()
+
+max_ammo = 5
+
+font.init()
+font2 = font.Font(None, 40)
+
+check = 0
+
+life = 3
+
+
+while run:
+    keys_pressed = key.get_pressed()
+    for e in event.get():
+        if e.type == QUIT:
+            run = False
+            finish = True
+            rel_time = False 
+
+        if SPACE:
+            if e.type == KEYDOWN:
+                
+                if e.key == K_SPACE:
+                    if num_fire < 5 and rel_time == False:
+                        num_fire = num_fire + 1
+                        rocket.fire()
+                    
+                    if num_fire >= 5 and rel_time == False:
+                        last_time = timer()
+                        rel_time = True
+
+
+    if not finish:
+        win_display.blit(background, ( 0, 0))
+        rocket.reset()
+        rocket.update()
+        asteroids.draw(win_display)
+        bullets.draw(win_display)
+        
+        check_text = font2.render("Score: "+str(check), True, (0, 128, 1))
+        missed_text = font2.render("Missed: "+str(missed) ,True, (7, 180, 253)) 
+        hp_text = font2.render("HP: "+str(life) ,True, (245, 0, 0))
+
+        win_display.blit(check_text, (0, 20))
+        win_display.blit(hp_text, (win_width -100, 10))
+        win_display.blit(missed_text, (0, 60))
+        monsters.draw(win_display)
+        asteroids.update(win_height, win_width)
+        bullets.update()
+        monsters.update(win_height, win_width)
+        sprites_list_monsters = sprite.groupcollide(monsters, bullets, True, True )
+        sprites_list_asteroid = sprite.groupcollide(asteroids, bullets, False, True )
+        if sprites_list_monsters:
+            x = randint(0, win_width)
+            y = -15
+            speed = 1
+            monster = Enemy("ufo2.png", x, y, speed, 70, 70)
+            monsters.add(monster)
+            check += 1
+        if sprite.spritecollide(rocket, asteroids , True) or sprite.spritecollide(rocket, monsters, True):
+            life -= 1
+                    
+        if rel_time:
+            now_time = timer()
+
+            if now_time - last_time < 2:
+
+                reload = font2.render('Wait, reload...', 1, (150, 0, 0))
+                win_display.blit(reload, (260, 460))
+            else:
+                SPACE = True
+                num_fire = 0
+                rel_time = False
+
+        if check >= 10:
+            win_text = font2.render('You win!!!', 1, (255, 253, 0))
+            win_display.blit(win_text,(300, 235))
+            finish = True
+        if missed >= 3 or life <= 0:
+            lost_text = font2.render('You lostad', 1, (150, 0, 0))
+            win_display.blit(lost_text,(300, 235))
+            finish = True
+
+
+        clock.tick(FPS)
+        display.update()
